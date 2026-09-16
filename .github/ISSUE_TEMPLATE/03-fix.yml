@@ -1,0 +1,39 @@
+name: Fix
+description: Report and fix a bug or regression
+title: "[Fix]: "
+labels: ["type:fix", "bug"]
+body:
+  - type: textarea
+    id: bug
+    attributes:
+      label: Bug Description
+      description: What is broken?
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to Reproduce
+      description: Clear, minimal reproduction steps
+      placeholder: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context / Logs / Screenshots
+      description: Environment, version, logs, screenshots
+    validations:
+      required: false

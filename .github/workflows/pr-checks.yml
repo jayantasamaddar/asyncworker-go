@@ -1,0 +1,46 @@
+name: pr-checks
+
+# Standard build/test gate for this standalone, zero-dependency Go module.
+# Mirrors the Makefile targets directly (see DEVELOPMENT.md / Makefile) —
+# GOWORK=off because this module is deliberately not a go.work member.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Check formatting
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "The following files are not gofmt'd:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: Test
+        run: go test ./... -race -v

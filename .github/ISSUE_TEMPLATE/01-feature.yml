@@ -1,0 +1,46 @@
+name: Feature
+description: Propose a new capability or major addition
+title: "[Feature]: "
+labels: ["type:feature"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem / Opportunity
+      description: What user or business problem does this solve?
+      placeholder: "As a user, I want to..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: High-level approach (not implementation details)
+      placeholder: "We could add..."
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope (In / Out)
+      description: What is explicitly included and excluded?
+      placeholder: |
+        In:
+        -
+        Out:
+        -
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: Conditions to consider this feature complete
+      placeholder: |
+        - [ ]
+        - [ ]
+    validations:
+      required: true

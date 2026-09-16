@@ -1,0 +1,36 @@
+name: Enhancement
+description: Improve or optimize an existing feature or workflow
+title: "[Enhancement]: "
+labels: ["type:enhancement"]
+body:
+  - type: textarea
+    id: current
+    attributes:
+      label: Current Behavior
+      description: What is the current state?
+    validations:
+      required: true
+
+  - type: textarea
+    id: issue
+    attributes:
+      label: Problem / Limitation
+      description: What’s inefficient, confusing, or painful?
+    validations:
+      required: true
+
+  - type: textarea
+    id: enhancement
+    attributes:
+      label: Proposed Enhancement
+      description: What should change?
+    validations:
+      required: true
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Expected Impact
+      description: UX, performance, cost, maintainability, etc.
+    validations:
+      required: false

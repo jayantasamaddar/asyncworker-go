@@ -1,0 +1,50 @@
+name: Release
+
+# This is a library with no binaries to build or publish — pushing a
+# vX.Y.Z tag is already enough for pkg.go.dev to pick up the new module
+# version on its own. All this workflow does is turn that tag into a
+# GitHub Release with auto-generated notes, after re-running the same
+# checks CI runs, against the exact tagged commit.
+#
+# To cut a release: `git tag vX.Y.Z && git push origin vX.Y.Z`.
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    env:
+      GOWORK: "off"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Go
+        uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+
+      - name: Build
+        run: go build ./...
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test ./... -race
+
+      - name: Create GitHub Release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" \
+            --title "${{ github.ref_name }}" \
+            --generate-notes
