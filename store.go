@@ -24,6 +24,13 @@ type Record struct {
 	CreatedAt time.Time
 	NextRunAt time.Time // claimable once time.Now() >= NextRunAt
 	LastError string    // best-effort, for observability/debugging only
+
+	// LeaseExpiresAt is set by Claim to now+leaseFor, and is what makes a
+	// claimed Record reclaimable if the claimer dies before calling
+	// Complete or Reschedule: once time.Now() is past it, the record is
+	// claimable again even though nothing ever resolved it. Zero means
+	// "not currently leased". Reschedule and Complete both clear it.
+	LeaseExpiresAt time.Time
 }
 
 // Store persists Records for durable, crash-surviving task execution. It is
@@ -39,19 +46,31 @@ type Record struct {
 // visibility timeout, or `SELECT ... FOR UPDATE SKIP LOCKED`) until
 // Complete or Reschedule resolves it, so multiple Pool instances (even in
 // different processes) can safely share one Store.
+//
+// A claim is only a lease, not a delete: if the claimer crashes before
+// calling Complete or Reschedule, the record must become claimable again
+// once its lease (see Claim) expires, so a crash mid-processing doesn't
+// silently drop the task. This does mean a task can be delivered and run
+// more than once if it outlives its lease — see Options.LeaseDuration.
 type Store interface {
 	// Enqueue persists a new record. rec.NextRunAt is normally rec.CreatedAt
 	// (claimable right away).
 	Enqueue(ctx context.Context, rec Record) error
 
-	// Claim returns up to n due records (NextRunAt <= time.Now()) and marks
-	// them claimed. Returns a nil/empty slice, not an error, when nothing
-	// is due.
-	Claim(ctx context.Context, n int) ([]Record, error)
+	// Claim returns up to n due records (NextRunAt <= time.Now()) whose
+	// lease has expired (or that have never been claimed), and marks them
+	// claimed by setting LeaseExpiresAt to time.Now().Add(leaseFor).
+	// Returns a nil/empty slice, not an error, when nothing is due.
+	//
+	// A claimed record must remain claimed (invisible to other Claim
+	// calls) only until LeaseExpiresAt, at which point it becomes
+	// claimable again even if the original claimer never called Complete
+	// or Reschedule — that's what lets work survive a crash mid-processing.
+	Claim(ctx context.Context, n int, leaseFor time.Duration) ([]Record, error)
 
 	// Reschedule persists rec after a failed attempt, with rec.Attempt and
-	// rec.NextRunAt already updated by the caller. It makes the record
-	// claimable again at rec.NextRunAt.
+	// rec.NextRunAt already updated by the caller, and clears its lease. It
+	// makes the record claimable again at rec.NextRunAt.
 	Reschedule(ctx context.Context, rec Record) error
 
 	// Complete removes a record after it succeeds, exhausts its retries, or
@@ -84,7 +103,7 @@ func (s *MemoryStore) Enqueue(_ context.Context, rec Record) error {
 	return nil
 }
 
-func (s *MemoryStore) Claim(_ context.Context, n int) ([]Record, error) {
+func (s *MemoryStore) Claim(_ context.Context, n int, leaseFor time.Duration) ([]Record, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -97,10 +116,13 @@ func (s *MemoryStore) Claim(_ context.Context, n int) ([]Record, error) {
 		if rec.NextRunAt.After(now) {
 			continue
 		}
+		// Still leased to a previous claimer: not due for reclaim yet.
+		if rec.LeaseExpiresAt.After(now) {
+			continue
+		}
+		rec.LeaseExpiresAt = now.Add(leaseFor)
+		s.records[id] = rec
 		claimed = append(claimed, rec)
-		// In flight: invisible to future Claim calls until Reschedule or
-		// Complete puts it (or removes it) again.
-		delete(s.records, id)
 	}
 	return claimed, nil
 }
@@ -108,6 +130,7 @@ func (s *MemoryStore) Claim(_ context.Context, n int) ([]Record, error) {
 func (s *MemoryStore) Reschedule(_ context.Context, rec Record) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	rec.LeaseExpiresAt = time.Time{}
 	s.records[rec.ID] = rec
 	return nil
 }

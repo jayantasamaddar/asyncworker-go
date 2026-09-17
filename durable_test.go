@@ -25,9 +25,9 @@ func (s *spyStore) Enqueue(ctx context.Context, rec Record) error {
 	return s.MemoryStore.Enqueue(ctx, rec)
 }
 
-func (s *spyStore) Claim(ctx context.Context, n int) ([]Record, error) {
+func (s *spyStore) Claim(ctx context.Context, n int, leaseFor time.Duration) ([]Record, error) {
 	s.claims.Add(1)
-	return s.MemoryStore.Claim(ctx, n)
+	return s.MemoryStore.Claim(ctx, n, leaseFor)
 }
 
 func (s *spyStore) Reschedule(ctx context.Context, rec Record) error {
@@ -257,6 +257,42 @@ func TestPool_DefaultStore_IsMemoryStore(t *testing.T) {
 	})
 }
 
+func TestMemoryStore_ClaimReclaimsAfterLeaseExpires(t *testing.T) {
+	t.Run("should keep a claimed record hidden until its lease expires, then reclaim it", func(t *testing.T) {
+		store := NewMemoryStore()
+		ctx := context.Background()
+
+		if err := store.Enqueue(ctx, Record{ID: "task-1", NextRunAt: time.Now()}); err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		first, err := store.Claim(ctx, 10, 10*time.Millisecond)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(first) != 1 || first[0].ID != "task-1" {
+			t.Fatalf("expected to claim task-1, got %+v", first)
+		}
+
+		// Lease still held: a second claimer must not see it.
+		again, err := store.Claim(ctx, 10, 10*time.Millisecond)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if len(again) != 0 {
+			t.Fatalf("expected no records while leased, got %+v", again)
+		}
+
+		// Simulate the original claimer crashing: nobody ever calls
+		// Complete or Reschedule. Once the lease expires, the record must
+		// become claimable again.
+		waitFor(t, time.Second, func() bool {
+			recs, err := store.Claim(ctx, 10, 10*time.Millisecond)
+			return err == nil && len(recs) == 1 && recs[0].ID == "task-1"
+		})
+	})
+}
+
 func TestMemoryStore_ClaimHonorsNextRunAt(t *testing.T) {
 	t.Run("should not claim a record before its NextRunAt", func(t *testing.T) {
 		store := NewMemoryStore()
@@ -269,7 +305,7 @@ func TestMemoryStore_ClaimHonorsNextRunAt(t *testing.T) {
 			t.Fatalf("unexpected error: %v", err)
 		}
 
-		recs, err := store.Claim(ctx, 10)
+		recs, err := store.Claim(ctx, 10, time.Minute)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

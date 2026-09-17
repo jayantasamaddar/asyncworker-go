@@ -92,6 +92,16 @@ type Options struct {
 	// durable tasks. Defaults to 200ms. Irrelevant if Enqueue is never
 	// used.
 	PollInterval time.Duration
+
+	// LeaseDuration is how long a claimed durable task is invisible to
+	// other claimers (including other Pool instances/processes sharing the
+	// same Store) before it's treated as abandoned and reclaimed. It's
+	// what lets a task survive a crash mid-processing instead of being
+	// dropped forever: pick a value comfortably longer than the task
+	// normally takes, since a task that outlives its lease can be claimed
+	// and run again concurrently. Defaults to 2 minutes. Irrelevant if
+	// Enqueue is never used.
+	LeaseDuration time.Duration
 }
 
 // Pool is a fixed-size group of workers draining an in-memory task queue,
@@ -129,6 +139,9 @@ func New(parent context.Context, opts Options) *Pool {
 	}
 	if opts.Store == nil {
 		opts.Store = NewMemoryStore()
+	}
+	if opts.LeaseDuration <= 0 {
+		opts.LeaseDuration = 2 * time.Minute
 	}
 
 	ctx, cancel := context.WithCancel(parent)
