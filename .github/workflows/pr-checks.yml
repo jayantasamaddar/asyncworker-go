@@ -3,12 +3,26 @@ name: pr-checks
 # Standard build/test gate for this standalone, zero-dependency Go module.
 # Mirrors the Makefile targets directly (see DEVELOPMENT.md / Makefile) —
 # GOWORK=off because this module is deliberately not a go.work member.
+#
+# Also gates PRs on having a changeset (see DEVELOPMENT.md#releasing) —
+# without one, version.yml has nothing to consume and the change ships
+# without ever getting a version bump / release. A PR that doesn't need a
+# release (docs, CI config, tests-only) can add an empty changeset instead
+# of skipping this entirely: `npx changeset add --empty`.
 
 on:
   push:
     branches: [main]
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
   pull_request:
     branches: [main]
+    paths:
+      - "**/*.go"
+      - "go.mod"
+      - "go.sum"
 
 permissions:
   contents: read
@@ -44,3 +58,27 @@ jobs:
 
       - name: Test
         run: go test ./... -race -v
+
+  changeset-check:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Fetch base branch
+        run: git fetch origin ${{ github.event.pull_request.base.ref }} --depth=1
+
+      - name: Require a changeset
+        run: npx changeset status --since=origin/${{ github.event.pull_request.base.ref }}
