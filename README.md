@@ -86,17 +86,10 @@ payload, _ := json.Marshal(webhookRequest{URL: "https://example.com"})
 id, err := pool.Enqueue(ctx, "send-webhook", payload)
 ```
 
-- A background poller (tune the interval with `Options.PollInterval`,
-  default 200ms) claims due records from the `Store` and runs them through
-  the matching registered `Handler`. This is what lets work enqueued before
-  a crash — or by a different process sharing the same `Store` — get picked
-  up and run.
-- A task `Enqueue`'d under a type with no registered `Handler` fails
-  permanently (`UnregisteredHandlerError`), without burning retries.
-- `MemoryStore` (the default when `Options.Store` is nil) is a real,
-  concurrency-safe implementation of `Store` — it's just in-process and
-  non-persisting, so it behaves exactly like the original queue. Implement
-  `Store` yourself against Redis, Postgres, SQS, etc. for actual durability;
-  see the interface doc comment in `store.go` for the concurrency
-  guarantees (e.g. lease/visibility-timeout on `Claim`) a real
-  implementation needs.
+- A background poller (tune the interval with `Options.PollInterval`, default 200ms) claims due records from the `Store` and runs them through the matching registered `Handler`. This is what lets work enqueued before a crash — or by a different process sharing the same `Store` — get picked up and run.
+- A task `Enqueue`'d under a type with no registered `Handler` fails permanently (`UnregisteredHandlerError`), without burning retries.
+- Claiming a record is a lease, not a delete: it stays invisible to other claimers only until `Options.LeaseDuration` (default 2 minutes) elapses.
+
+  If the claiming process crashes before calling `Complete` or `Reschedule`, the record becomes claimable again once its lease expires, instead of being lost. Pick a `LeaseDuration` comfortably longer than the task normally takes — a task that outlives its lease can be claimed and run again concurrently.
+
+- `MemoryStore` (the default when `Options.Store` is nil) is a real, concurrency-safe implementation of `Store` — it's just in-process and non-persisting, so it behaves exactly like the original queue. Implement `Store` yourself against Redis, Postgres, SQS, etc. for actual durability; see the interface doc comment in `store.go` for the concurrency guarantees (e.g. lease/visibility-timeout on `Claim`) a real implementation needs.

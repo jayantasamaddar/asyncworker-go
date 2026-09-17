@@ -119,7 +119,7 @@ func (p *Pool) pollStore() {
 
 func (p *Pool) claimDue() {
 	batch := p.opts.Workers * 2
-	recs, err := p.opts.Store.Claim(p.ctx, batch)
+	recs, err := p.opts.Store.Claim(p.ctx, batch, p.opts.LeaseDuration)
 	if err != nil {
 		if p.opts.OnError != nil {
 			p.opts.OnError("", 0, fmt.Errorf("asyncworker: claim: %w", err))
