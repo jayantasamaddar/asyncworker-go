@@ -39,6 +39,15 @@ var (
 // tasks should select on ctx.Done().
 type Task func(ctx context.Context) error
 
+// PreHook is called before each attempt of a task. A panic inside a PreHook
+// is recovered and does not prevent the task from running.
+type PreHook func(ctx context.Context, taskID string)
+
+// PostHook is called after each attempt of a task, whether it succeeded
+// (err is nil) or failed. A panic inside a PostHook is recovered and does
+// not affect the task's own outcome.
+type PostHook func(ctx context.Context, taskID string, err error)
+
 // job is a queued unit of work, either an ephemeral closure submitted via
 // Submit or a durable, Store-backed task submitted via Enqueue.
 type job struct {
@@ -92,6 +101,17 @@ type Options struct {
 	// durable tasks. Defaults to 200ms. Irrelevant if Enqueue is never
 	// used.
 	PollInterval time.Duration
+
+	// PreHooks run, in order, before every attempt of every task (Submit or
+	// Enqueue). Useful for cross-cutting concerns like logging or metrics.
+	// A panicking PreHook is recovered and does not prevent the task from
+	// running.
+	PreHooks []PreHook
+
+	// PostHooks run, in order, after every attempt of every task, whether
+	// that attempt succeeded or failed. A panicking PostHook is recovered
+	// and does not affect the task's own outcome.
+	PostHooks []PostHook
 
 	// LeaseDuration is how long a claimed durable task is invisible to
 	// other claimers (including other Pool instances/processes sharing the
@@ -257,7 +277,9 @@ func (p *Pool) worker() {
 func (p *Pool) run(j job) {
 	j.attempt++
 
+	p.executePreHooksSafe(j)
 	err := p.invoke(j)
+	p.executePostHooksSafe(j, err)
 
 	if err == nil {
 		if j.durable {
@@ -309,6 +331,42 @@ func (p *Pool) run(j job) {
 
 	p.pending.Add(1)
 	go p.scheduleRetry(j, j.policy.delay(j.attempt+1))
+}
+
+// executePreHooksSafe runs all configured PreHooks for j, recovering from
+// any panic so a bad hook can't take down a worker goroutine or block the
+// task it's observing.
+func (p *Pool) executePreHooksSafe(j job) {
+	for _, hook := range p.opts.PreHooks {
+		p.runPreHookSafe(hook, j)
+	}
+}
+
+func (p *Pool) runPreHookSafe(hook PreHook, j job) {
+	defer func() {
+		if r := recover(); r != nil && p.opts.OnError != nil {
+			p.opts.OnError(j.id, j.attempt, fmt.Errorf("asyncworker: pre-hook panicked: %v", r))
+		}
+	}()
+	hook(p.ctx, j.id)
+}
+
+// executePostHooksSafe runs all configured PostHooks for j, recovering from
+// any panic so a bad hook can't take down a worker goroutine or affect the
+// task's own outcome.
+func (p *Pool) executePostHooksSafe(j job, taskErr error) {
+	for _, hook := range p.opts.PostHooks {
+		p.runPostHookSafe(hook, j, taskErr)
+	}
+}
+
+func (p *Pool) runPostHookSafe(hook PostHook, j job, taskErr error) {
+	defer func() {
+		if r := recover(); r != nil && p.opts.OnError != nil {
+			p.opts.OnError(j.id, j.attempt, fmt.Errorf("asyncworker: post-hook panicked: %v", r))
+		}
+	}()
+	hook(p.ctx, j.id, taskErr)
 }
 
 // invoke runs the task (a closure for Submit jobs, or a registered Handler
