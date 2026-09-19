@@ -1,3 +1,3 @@
-module github.com/zenius-one/nexthis/packages/asyncworker
+module github.com/jayantasamaddar/asyncworker-go
 
-go 1.26.7
+go 1.27.1
