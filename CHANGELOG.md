@@ -1,5 +1,11 @@
 # asyncworker-go
 
+## 0.2.0
+
+### Minor Changes
+
+- [#6](https://github.com/jayantasamaddar/asyncworker-go/pull/6) [`fc3afaa`](https://github.com/jayantasamaddar/asyncworker-go/commit/fc3afaa44f2e3f4623e16a1a54804ec39a977166) Thanks [@jayantasamaddar](https://github.com/jayantasamaddar)! - Add `Options.PreHooks` and `Options.PostHooks` for running observer callbacks (logging, metrics, tracing) before and after every task attempt. Hooks run in order and are panic-isolated so a bad hook can't take down a worker or affect the task's own outcome.
+
 ## 0.1.1
 
 ### Patch Changes
