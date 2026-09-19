@@ -1,6 +1,6 @@
 {
   "name": "asyncworker-go",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "Version-tracking shim for this Go module. NOT an npm package — never published, no scripts beyond release tooling. Exists only so Changesets can bump the version and generate CHANGELOG.md; the release workflow reads this version to cut the git tag. See DEVELOPMENT.md.",
   "license": "MIT",

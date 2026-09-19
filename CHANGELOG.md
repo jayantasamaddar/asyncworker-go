@@ -1,5 +1,11 @@
 # asyncworker-go
 
+## 0.1.1
+
+### Patch Changes
+
+- [#5](https://github.com/jayantasamaddar/asyncworker-go/pull/5) [`3f08ff1`](https://github.com/jayantasamaddar/asyncworker-go/commit/3f08ff1702562e169b5a1ad00f23bb19868c741f) Thanks [@jayantasamaddar](https://github.com/jayantasamaddar)! - Fix incorrect module path in `go.mod` — it declared `github.com/zenius-one/nexthis/packages/asyncworker` instead of `github.com/jayantasamaddar/asyncworker-go`.
+
 ## 0.1.0
 
 ### Minor Changes
